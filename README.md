@@ -1,4 +1,4 @@
-# tt_um_morse_converter - ASCII to Morse Code Converter
+# tt-vova-counter-two - ASCII to Morse Code Converter
 
 [![gds](../../actions/workflows/gds.yaml/badge.svg)](../../actions/workflows/gds.yaml)
 [![test](../../actions/workflows/test.yaml/badge.svg)](../../actions/workflows/test.yaml)
