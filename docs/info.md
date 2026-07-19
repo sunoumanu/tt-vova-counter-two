@@ -12,25 +12,25 @@ A hardware ASCII-to-Morse converter. The host places a 7-bit ASCII code on
 `ui[6:0]` and strobes `load` (`ui[7]`); the chip looks the character up in an
 on-chip ROM and serializes the ITU-R M.1677-1 element sequence on the `key`
 line (`uo[0]`) at a selectable, human-perceptible speed. The chip owns all
-Morse timing — the host only feeds bytes and respects the `ready` flag, so a
+Morse timing; the host only feeds bytes and respects the `ready` flag, so a
 simple polling loop in MicroPython can stream arbitrary-length text without
 dropping characters.
 
 The Morse stream is presented three ways simultaneously:
 
-1. **Key line** (`uo[0]`) — raw on/off keying for a scope, LED, or relay.
-2. **Audio** (`uo[7]`) — the key line gated with a square-wave sidetone,
-   encoded as 5-bit PWM at f_clk/32 (≈312 kHz at 10 MHz) for the TT Audio
+1. **Key line** (`uo[0]`): raw on/off keying for a scope, LED, or relay.
+2. **Audio** (`uo[7]`): the key line gated with a square-wave sidetone,
+   encoded as 5-bit PWM at f_clk/32 (~312 kHz at 10 MHz) for the TT Audio
    Pmod. Silence is 50% duty, so the Pmod's filter output rests at mid-rail;
    keying is aligned to tone zero crossings to suppress clicks.
-3. **Visual** — `uo[7:0]` is also the demoboard's 7-segment bus, so the
+3. **Visual**: `uo[7:0]` is also the demoboard's 7-segment bus, so the
    status bits light segments in sync with the transmitted code (segment *a*
    flashes with `key`). Setting `display_en` = 0 blanks the fast-toggling
    diagnostic segments (`element`, `tick`); `key`, the handshake lines and the
    audio are unaffected so the host protocol keeps working.
 
-**Character set:** letters `A`–`Z` (lowercase folded to uppercase), digits
-`0`–`9`, and the punctuation `. , ? ' ! / ( ) & : ; = + - _ " @`. An ASCII
+**Character set:** letters `A`-`Z` (lowercase folded to uppercase), digits
+`0`-`9`, and the punctuation `. , ? ' ! / ( ) & : ; = + - _ " @`. An ASCII
 space emits a word gap. Anything else asserts `invalid`, produces no key-down,
 and is discarded; `ready` returns after one dit-time and `invalid` clears on
 the next successful load. (`$` is excluded: its seven-element pattern does not
@@ -55,13 +55,13 @@ between letters gives exactly 7 T, not 10 T).
 
 | `wpm_sel` | Divider | Dit-time | Approx. WPM |
 |-----------|---------|----------|-------------|
-| `000`     | 2^21    | ≈210 ms  | ≈5.7 (default) |
-| `001`     | 2^20    | ≈105 ms  | ≈11.4       |
-| `010`     | 2^19    | ≈52 ms   | ≈23         |
-| `011`     | 2^18    | ≈26 ms   | ≈46         |
-| `100`     | 2^16    | ≈6.6 ms  | ≈183        |
-| `101`     | 2^12    | ≈0.41 ms | scope work  |
-| `110`     | 2^8     | ≈26 µs   | hardware test |
+| `000`     | 2^21    | ~210 ms  | ~5.7 (default) |
+| `001`     | 2^20    | ~105 ms  | ~11.4       |
+| `010`     | 2^19    | ~52 ms   | ~23         |
+| `011`     | 2^18    | ~26 ms   | ~46         |
+| `100`     | 2^16    | ~6.6 ms  | ~183        |
+| `101`     | 2^12    | ~0.41 ms | scope work  |
+| `110`     | 2^8     | ~26 µs   | hardware test |
 | `111`     | 2^4     | 1.6 µs   | simulation turbo |
 
 Timing is strictly clock-proportional. Speed and configuration changes take
@@ -133,10 +133,10 @@ portable to microcotb for hardware-in-the-loop runs.
 ## External hardware
 
 - [TT Audio Pmod](https://github.com/MichaelBell/tt-audio-pmod) on the output
-  Pmod header — takes the PWM sidetone on `uo[7]` and drives a piezo or
+  Pmod header; it takes the PWM sidetone on `uo[7]` and drives a piezo or
   headphone jack.
 - Fallback without the Pmod: an LED (demoboard 7-segment already works) on
-  `uo[0]`, or a piezo buzzer on `uo[0]` through a series resistor — a
+  `uo[0]`, or a piezo buzzer on `uo[0]` through a series resistor: a
   click-per-element rather than a tone, but the rhythm is fully audible.
 
 ### Pinout

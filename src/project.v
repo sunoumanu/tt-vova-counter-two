@@ -2,7 +2,7 @@
  * Copyright (c) 2026 Vladimir Velikanov
  * SPDX-License-Identifier: Apache-2.0
  *
- * tt_um_morse_converter — ASCII-to-Morse converter for Tiny Tapeout.
+ * tt_um_morse_converter - ASCII-to-Morse converter for Tiny Tapeout.
  *
  * Accepts 7-bit ASCII characters over a load/ready handshake, looks them up
  * in a combinational ROM, and serializes the ITU-R M.1677-1 element sequence
@@ -11,10 +11,10 @@
  *
  * Top-level wrapper only: pin mapping, reset synchronization, and the
  * uio_oe tie-off. The functional blocks live in their own files:
- *   morse_rom.v    — character encoding (ASCII -> element pattern)
- *   dit_timer.v    — timing (dit-rate divider, speed selection)
- *   morse_fsm.v    — serialization and the load/ready handshake
- *   sidetone_pwm.v — audio (sidetone + PWM for the TT Audio Pmod)
+ *   morse_rom.v    - character encoding (ASCII -> element pattern)
+ *   dit_timer.v    - timing (dit-rate divider, speed selection)
+ *   morse_fsm.v    - serialization and the load/ready handshake
+ *   sidetone_pwm.v - audio (sidetone + PWM for the TT Audio Pmod)
  */
 
 `default_nettype none

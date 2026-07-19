@@ -1,7 +1,7 @@
-# tt_um_morse_converter — Specification
+# tt_um_morse_converter Specification
 
 **Project:** ASCII-to-Morse converter for Tiny Tapeout
-**Target:** TTSKY26c shuttle (SkyWater 130nm), 1×1 tile
+**Target:** TTSKY26c shuttle (SkyWater 130nm), 1x1 tile
 **HDL:** Verilog-2001 (plain, synthesizable, no vendor primitives)
 **Top module:** `tt_um_morse_converter`
 **Template:** [ttsky-verilog-template](https://github.com/TinyTapeout/ttsky-verilog-template), structured after [tt_um_poket_animal](https://github.com/sunoumanu/tt_um_poket_animal)
@@ -15,22 +15,22 @@ A hardware ASCII-to-Morse code converter. The design accepts 7-bit ASCII charact
 
 The Morse stream is presented three ways simultaneously:
 
-1. **Key line** — a raw on/off keying signal on an output pin (scope, LED, or relay).
-2. **Audio** — the key line gated with a sidetone carrier, PWM-encoded for the [TT Audio Pmod](https://github.com/MichaelBell/tt-audio-pmod) on `uo[7]`.
-3. **Visual** — the current element and character state rendered on the demoboard 7-segment display.
+1. **Key line**: a raw on/off keying signal on an output pin (scope, LED, or relay).
+2. **Audio**: the key line gated with a sidetone carrier, PWM-encoded for the [TT Audio Pmod](https://github.com/MichaelBell/tt-audio-pmod) on `uo[7]`.
+3. **Visual**: the current element and character state rendered on the demoboard 7-segment display.
 
 Characters are supplied by MicroPython running on the demoboard's RP2350, via the `ttboard` SDK. The chip owns all timing; the host only feeds bytes.
 
 ### 1.1 Goals
 
 - Correct ITU-R M.1677-1 Morse encoding for letters, digits, and common punctuation.
-- Timing derived entirely from the project clock, with a selectable words-per-minute rate in the range a human can follow by ear (roughly 5–20 WPM).
+- Timing derived entirely from the project clock, with a selectable words-per-minute rate in the range a human can follow by ear (roughly 5-20 WPM).
 - Flow control that lets a MicroPython script stream arbitrary-length text without dropping characters or requiring the host to know Morse timing.
 - Fit within a single Tiny Tapeout tile with margin.
 
 ### 1.2 Non-goals
 
-- Morse decoding (audio or key input → ASCII).
+- Morse decoding (audio or key input to ASCII).
 - Lowercase-vs-uppercase distinction (Morse has no case; lowercase is folded to uppercase).
 - Prosigns, Q-codes, or non-Latin extensions (à, ä, ñ, etc.).
 - Farnsworth spacing (character speed decoupled from word speed).
@@ -73,16 +73,16 @@ module tt_um_morse_converter (
 
 ### 3.2 Pin assignment
 
-#### Inputs — `ui_in[7:0]`
+#### Inputs: `ui_in[7:0]`
 
 | Pin | Name | Description |
 |---|---|---|
 | `ui[6:0]` | `char_in[6:0]` | 7-bit ASCII code of the character to send. Sampled on the rising edge of `load`. |
-| `ui[7]` | `load` | Load strobe. A 0→1 transition captures `char_in` when `ready` is high. Edge-detected and synchronized on-chip. |
+| `ui[7]` | `load` | Load strobe. A 0-to-1 transition captures `char_in` when `ready` is high. Edge-detected and synchronized on-chip. |
 
 Speed and mode selection use the bidirectional bank as inputs (§3.4) so that the whole ASCII code point plus the strobe fit in the dedicated input byte.
 
-#### Outputs — `uo_out[7:0]`
+#### Outputs: `uo_out[7:0]`
 
 | Pin | Name | Description |
 |---|---|---|
@@ -97,7 +97,7 @@ Speed and mode selection use the bidirectional bank as inputs (§3.4) so that th
 
 The `uo[7]` assignment matches the TT Audio Pmod's mono channel so the Pmod can be plugged directly onto the output header.
 
-#### Bidirectional — `uio[7:0]`
+#### Bidirectional: `uio[7:0]`
 
 The design drives no bidirectional pins; `uio_oe` is hard-tied to `8'h00` and all eight lines are inputs. This keeps the bidirectional header free for the Audio Pmod's pass-through and avoids any contention with the RP2350.
 
@@ -116,7 +116,7 @@ Configuration inputs are sampled continuously but only take effect at character 
 | Parameter | Value |
 |---|---|
 | Nominal project clock | 10 MHz |
-| Supported range | 1 MHz – 50 MHz (timing scales proportionally; see §4.3) |
+| Supported range | 1 MHz to 50 MHz (timing scales proportionally; see §4.3) |
 | Reset | `rst_n`, active low, asynchronous assert, synchronous release |
 
 All flip-flops are clocked on the rising edge of `clk`. There are no gated clocks, latches, or multiple clock domains. Reset returns the design to `IDLE` with `key` low, `ready` high, and the audio output at idle.
@@ -125,7 +125,7 @@ All flip-flops are clocked on the rising edge of `clk`. There are no gated clock
 
 `uo[7:0]` is also the demoboard's 7-segment bus in the conventional `{dp, g, f, e, d, c, b, a}` order. Because this design assigns those pins to status signals, the segments light as a side effect of the status bits. This is intentional and defined rather than accidental:
 
-- Segment `a` (`uo[0]`) follows `key` — the display's top bar flashes exactly in time with the Morse.
+- Segment `a` (`uo[0]`) follows `key`, so the display's top bar flashes exactly in time with the Morse.
 - Segment `b` (`uo[1]`) follows `ready`, `c` follows `busy`, `d` follows `element`.
 - The decimal point (`uo[7]`) carries the PWM audio, which at audible frequencies appears as a dimly lit dot while sounding.
 
@@ -139,15 +139,15 @@ The visible result is a display that pulses in sync with the transmitted code. U
 
 The design implements the ITU-R M.1677-1 international Morse alphabet.
 
-**Letters (case-folded):** `A`–`Z`. Codes `0x61`–`0x7A` are mapped to `0x41`–`0x5A` before lookup by clearing bit 5.
+**Letters (case-folded):** `A`-`Z`. Codes `0x61`-`0x7A` are mapped to `0x41`-`0x5A` before lookup by clearing bit 5.
 
-**Digits:** `0`–`9`, all five elements long.
+**Digits:** `0`-`9`, all five elements long.
 
 **Punctuation:** `.` `,` `?` `'` `!` `/` `(` `)` `&` `:` `;` `=` `+` `-` `_` `"` `$` `@`
 
 **Space (`0x20`):** not a code; emits a word gap (§4.2).
 
-**Everything else:** treated as invalid — `invalid` is asserted, no key-down occurs, and the character is discarded. `ready` returns high after one dit-time so the host is never stalled by bad input.
+**Everything else:** treated as invalid: `invalid` is asserted, no key-down occurs, and the character is discarded. `ready` returns high after one dit-time so the host is never stalled by bad input.
 
 #### 4.1.1 Encoding format
 
@@ -155,10 +155,10 @@ Each character is stored as a fixed-width ROM word carrying a length field and a
 
 | Field | Width | Meaning |
 |---|---|---|
-| `len` | 3 bits | Number of elements, 1–6. Zero means "no encoding" and drives `invalid`. |
+| `len` | 3 bits | Number of elements, 1-6. Zero means "no encoding" and drives `invalid`. |
 | `pattern` | 6 bits | Element bits, MSB first. `0` = dit, `1` = dah. Bits beyond `len` are don't-care. |
 
-Six element bits covers every character in the set above, including the eight-element-free punctuation cases; the longest supported sequences (`$` at seven elements) are excluded from the base set for this reason. If `$` is required, the pattern field widens to 7 bits at a cost of one extra ROM bit per entry — an implementation option, not a requirement.
+Six element bits covers every character in the set above, including the eight-element-free punctuation cases; the longest supported sequences (`$` at seven elements) are excluded from the base set for this reason. If `$` is required, the pattern field widens to 7 bits at a cost of one extra ROM bit per entry; this is an implementation option, not a requirement.
 
 The ROM is a combinational `case` statement over the 7-bit ASCII code, synthesized as logic rather than a memory macro. Sparse and irregular by nature, it is expected to optimize down substantially.
 
@@ -186,16 +186,16 @@ At the nominal 10 MHz project clock:
 
 | `wpm_sel` | Divider | Dit-time | Approx. WPM | Use |
 |---|---|---|---|---|
-| `000` | 2²¹ | ≈ 210 ms | ≈ 5.7 | Very slow — comfortable for a beginner to copy by ear |
-| `001` | 2²⁰ | ≈ 105 ms | ≈ 11.4 | Slow, clearly readable |
-| `010` | 2¹⁹ | ≈ 52 ms | ≈ 23 | Moderate |
-| `011` | 2¹⁸ | ≈ 26 ms | ≈ 46 | Fast — audible, not comfortably copyable |
-| `100` | 2¹⁶ | ≈ 6.6 ms | ≈ 183 | Very fast, machine-readable |
-| `101` | 2¹² | ≈ 0.41 ms | — | Scope/logic-analyzer work |
-| `110` | 2⁸ | ≈ 26 µs | — | Fast hardware test |
-| `111` | 2⁴ | 1.6 µs | — | Simulation turbo (16 clocks per dit) |
+| `000` | 2^21 | ~210 ms | ~5.7 | Very slow, comfortable for a beginner to copy by ear |
+| `001` | 2^20 | ~105 ms | ~11.4 | Slow, clearly readable |
+| `010` | 2^19 | ~52 ms | ~23 | Moderate |
+| `011` | 2^18 | ~26 ms | ~46 | Fast, audible but not comfortably copyable |
+| `100` | 2^16 | ~6.6 ms | ~183 | Very fast, machine-readable |
+| `101` | 2^12 | ~0.41 ms | n/a | Scope/logic-analyzer work |
+| `110` | 2^8 | ~26 µs | n/a | Fast hardware test |
+| `111` | 2^4 | 1.6 µs | n/a | Simulation turbo (16 clocks per dit) |
 
-Settings `000`–`010` satisfy the "long enough for a human to recognize" requirement; `000` is the recommended default and is what the demo script selects.
+Settings `000`-`010` satisfy the "long enough for a human to recognize" requirement; `000` is the recommended default and is what the demo script selects.
 
 Timing is strictly clock-proportional: halving the project clock doubles every duration and halves the effective WPM. The table is a convenience for the 10 MHz nominal, not a hardware constant.
 
@@ -208,7 +208,7 @@ A two-wire `load` / `ready` handshake, designed so a MicroPython script can driv
 3. On the rising edge of `load`, if `ready` is high, the character is captured into the staging register and `ready` falls.
 4. The host drives `load` low. It may now prepare the next character.
 5. The design serializes the character. `busy` is high throughout.
-6. `ready` rises again as soon as the staging register is free — that is, during the trailing inter-character gap, not after it. This gives the host a full 3 T window to supply the next character, so a continuous stream has no inserted pauses.
+6. `ready` rises again as soon as the staging register is free, that is, during the trailing inter-character gap, not after it. This gives the host a full 3 T window to supply the next character, so a continuous stream has no inserted pauses.
 7. `char_done` pulses for one dit-time when the character and its gap have fully completed.
 
 Rules:
@@ -229,9 +229,9 @@ Asserting `rst_n` low at any point immediately drives `key` low, silences the au
 
 The demoboard has no on-board speaker. Audio is produced through the [TT Audio Pmod](https://github.com/MichaelBell/tt-audio-pmod), which plugs onto the output Pmod header, takes a single PWM signal on `uo[7]`, low-pass filters it, and drives either a piezo element or a headphone jack.
 
-The Pmod's filter has a deliberately high cutoff, so the PWM carrier must be well above the audio band — a minimum of 200 kHz is recommended by its author. The design therefore generates the sidetone as a **PWM-encoded square wave**: a high-frequency PWM carrier whose duty cycle alternates between two levels at the audio-tone rate.
+The Pmod's filter has a deliberately high cutoff, so the PWM carrier must be well above the audio band; a minimum of 200 kHz is recommended by its author. The design therefore generates the sidetone as a **PWM-encoded square wave**: a high-frequency PWM carrier whose duty cycle alternates between two levels at the audio-tone rate.
 
-Concretely, `audio_pwm` is the output of an 8-bit PWM generator running at `f_clk / 256` (≈ 39 kHz at 10 MHz). Because 39 kHz sits below the recommended 200 kHz, the implementation shall instead use a 6-bit PWM at `f_clk / 64` (≈ 156 kHz at 10 MHz) or a 5-bit PWM at `f_clk / 32` (≈ 312 kHz), selected to keep the carrier above the audible band while preserving enough duty resolution for a clean square-wave tone. The 5-bit / 312 kHz option is the baseline.
+Concretely, `audio_pwm` is the output of an 8-bit PWM generator running at `f_clk / 256` (~39 kHz at 10 MHz). Because 39 kHz sits below the recommended 200 kHz, the implementation shall instead use a 6-bit PWM at `f_clk / 64` (~156 kHz at 10 MHz) or a 5-bit PWM at `f_clk / 32` (~312 kHz), selected to keep the carrier above the audible band while preserving enough duty resolution for a clean square-wave tone. The 5-bit / 312 kHz option is the baseline.
 
 ### 5.2 Tone generation
 
@@ -239,10 +239,10 @@ Concretely, `audio_pwm` is the output of an 8-bit PWM generator running at `f_cl
 
   | `tone_sel` | Approx. pitch at 10 MHz | Note |
   |---|---|---|
-  | `00` | ≈ 600 Hz | Classic CW sidetone; the default |
-  | `01` | ≈ 800 Hz | Brighter, cuts through noise |
-  | `10` | ≈ 1000 Hz | Piezo-friendly |
-  | `11` | ≈ 440 Hz | Low and mellow |
+  | `00` | ~600 Hz | Classic CW sidetone; the default |
+  | `01` | ~800 Hz | Brighter, cuts through noise |
+  | `10` | ~1000 Hz | Piezo-friendly |
+  | `11` | ~440 Hz | Low and mellow |
 
   Pitches are generated by a free-running counter and are clock-proportional like everything else.
 
@@ -263,28 +263,28 @@ For users without the Audio Pmod, `uo[0]` (`key`) can drive a piezo buzzer direc
 ### 6.1 Block diagram
 
 ```
-        ui[6:0] ──────────────► ┌──────────────┐
-        ui[7] ─► sync/edge ───► │ Input        │
-                                │ handshake    │──► ready, invalid
-                                └──────┬───────┘
-                                       │ char[6:0]
-                                       ▼
-                                ┌──────────────┐
-                                │ ASCII→Morse  │
-                                │ ROM (case)   │──► len[2:0], pattern[5:0]
-                                └──────┬───────┘
-                                       ▼
-        uio[2:0] ──► ┌──────────┐  ┌──────────────┐
-                     │ Dit-time │─►│ Element      │──► key, element,
-                     │ divider  │  │ serializer   │    busy, char_done
-                     └──────────┘  │ FSM          │
-                          │        └──────┬───────┘
-                          └──► tick       │ key
-                                          ▼
-        uio[5:3] ──────────────► ┌──────────────┐
-                                 │ Sidetone +   │──► audio_pwm
-                                 │ PWM          │
-                                 └──────────────┘
+        ui[6:0] --------------> +--------------+
+        ui[7] -> sync/edge ---> | Input        |
+                                | handshake    |--> ready, invalid
+                                +------+-------+
+                                       | char[6:0]
+                                       v
+                                +--------------+
+                                | ASCII->Morse |
+                                | ROM (case)   |--> len[2:0], pattern[5:0]
+                                +------+-------+
+                                       v
+        uio[2:0] --> +----------+  +--------------+
+                     | Dit-time |->| Element      |--> key, element,
+                     | divider  |  | serializer   |    busy, char_done
+                     +----------+  | FSM          |
+                          |        +------+-------+
+                          +--> tick       | key
+                                          v
+        uio[5:3] --------------> +--------------+
+                                 | Sidetone +   |--> audio_pwm
+                                 | PWM          |
+                                 +--------------+
 ```
 
 ### 6.2 Modules
@@ -294,7 +294,7 @@ All modules live in `src/project.v` as a single file, matching the template's co
 | Module | Responsibility |
 |---|---|
 | `tt_um_morse_converter` | Top level. Pin mapping, `uio_oe` tie-off, unused-input tie-off. |
-| `morse_rom` | Combinational ASCII → `{len, pattern}` lookup, including case folding and space detection. |
+| `morse_rom` | Combinational ASCII to `{len, pattern}` lookup, including case folding and space detection. |
 | `dit_timer` | Programmable clock divider producing the one-cycle `tick` at each dit boundary. Reloads on speed change at character boundaries. |
 | `morse_fsm` | Element serializer and gap sequencer. Owns `key`, `busy`, `char_done`, `ready`. |
 | `sidetone_pwm` | Tone counter, duty selection, PWM comparator. |
@@ -312,7 +312,7 @@ States:
 | `GAP_WORD` | `key` = 0 for 7 T. Entered for ASCII space instead of the normal element sequence. |
 | `DISCARD` | Invalid character: assert `invalid`, hold `key` low for 1 T, return to `IDLE` with `ready` high. |
 
-The element counter walks the pattern MSB-first for `len` elements. Element duration is selected by the current pattern bit; gap selection is by counter position (last element → `GAP_CHAR`, otherwise `GAP_INTRA`).
+The element counter walks the pattern MSB-first for `len` elements. Element duration is selected by the current pattern bit; gap selection is by counter position (last element selects `GAP_CHAR`, otherwise `GAP_INTRA`).
 
 Every state transition is gated on `tick`, so the FSM advances only at dit boundaries and its state encoding is independent of the clock frequency.
 
@@ -321,10 +321,10 @@ Every state transition is gated on `tick`, so the FSM advances only at dit bound
 | Resource | Estimate |
 |---|---|
 | Flip-flops | ~60 (dit counter 21, tone counter 12, PWM 5, FSM state 3, element counter 3, pattern shift 6, staging register 7, misc. status) |
-| Combinational cells | ~350–450, dominated by the ROM case statement |
+| Combinational cells | ~350-450, dominated by the ROM case statement |
 | Tiles | 1 |
 
-Comfortably within a 1×1 tile, consistent with comparable designs on prior shuttles.
+Comfortably within a 1x1 tile, consistent with comparable designs on prior shuttles.
 
 ---
 
@@ -353,11 +353,11 @@ ui_in = 0
 
 `test/morse_demo.py` shall provide, at minimum:
 
-- `MorseSender(tt)` — a class wrapping the handshake.
-- `.configure(wpm_sel, audio=True, tone=0)` — writes the `uio_in` configuration byte.
-- `.send_char(c)` — polls `ready`, writes `char_in`, strobes `load`, returns once the character has been accepted (not once it has finished sounding).
-- `.send(text)` — sends a string character by character, blocking until the final `char_done`.
-- `.wait_idle()` — blocks until `busy` falls.
+- `MorseSender(tt)`: a class wrapping the handshake.
+- `.configure(wpm_sel, audio=True, tone=0)`: writes the `uio_in` configuration byte.
+- `.send_char(c)`: polls `ready`, writes `char_in`, strobes `load`, returns once the character has been accepted (not once it has finished sounding).
+- `.send(text)`: sends a string character by character, blocking until the final `char_done`.
+- `.wait_idle()`: blocks until `busy` falls.
 
 The script must not attempt to time Morse elements itself. All timing is the chip's; the host's only obligation is to respect `ready`.
 
@@ -366,7 +366,7 @@ The script must not attempt to time Morse elements itself. All timing is the chi
 - Polling `ready` at any rate is safe. There is no maximum poll interval; a slow host simply produces longer inter-character gaps, which remains valid Morse.
 - The script shall verify `ready` before every `load` strobe and shall never assume acceptance.
 - The script shall surface `invalid` to the user (e.g. print a warning naming the offending character) rather than silently skipping it.
-- A demo entry point shall send a fixed string — `"HELLO WORLD"` at `wpm_sel = 000` — as the canonical bring-up check.
+- A demo entry point shall send a fixed string, `"HELLO WORLD"` at `wpm_sel = 000`, as the canonical bring-up check.
 
 ---
 
@@ -420,20 +420,20 @@ GitHub Actions workflows from the template, unmodified: `test` (cocotb), `gds` (
 
 ```
 tt_um_morse_converter/
-├── src/
-│   └── project.v            # entire design, top module tt_um_morse_converter
-├── test/
-│   ├── test.py              # cocotb tests (§8.2)
-│   ├── tb.v                 # passive testbench wrapper, dumps tb.fst
-│   ├── morse_demo.py        # MicroPython host driver (§7.3)
-│   ├── Makefile
-│   └── requirements.txt
-├── docs/
-│   └── info.md              # project datasheet, rendered on the TT site
-├── .github/workflows/       # gds, docs, test, fpga
-├── info.yaml                # TT metadata and pin table
-├── README.md
-└── LICENSE                  # Apache-2.0
+|-- src/
+|   +-- project.v            # entire design, top module tt_um_morse_converter
+|-- test/
+|   |-- test.py              # cocotb tests (§8.2)
+|   |-- tb.v                 # passive testbench wrapper, dumps tb.fst
+|   |-- morse_demo.py        # MicroPython host driver (§7.3)
+|   |-- Makefile
+|   +-- requirements.txt
+|-- docs/
+|   +-- info.md              # project datasheet, rendered on the TT site
+|-- .github/workflows/       # gds, docs, test, fpga
+|-- info.yaml                # TT metadata and pin table
+|-- README.md
++-- LICENSE                  # Apache-2.0
 ```
 
 ### 9.1 `info.yaml` requirements
@@ -467,5 +467,5 @@ Must cover: what the project does, how to test it (including the MicroPython sni
 
 1. **`$` support.** Its seven-element pattern does not fit the 6-bit field. Widen the pattern to 7 bits (one extra ROM bit per entry, ~90 extra bits total), or drop `$` from the character set? Dropping it is the current baseline.
 2. **PWM carrier width.** 5-bit at 312 kHz is the baseline. Whether 6-bit at 156 kHz produces an audibly cleaner tone through the Pmod's filter is worth checking on hardware before freezing.
-3. **Farnsworth spacing.** Genuinely useful for learners — it keeps character speed high while stretching the gaps — but it costs a second timing divider and two more configuration bits. Deferred unless tile area proves generous after the first synthesis run.
+3. **Farnsworth spacing.** Genuinely useful for learners (it keeps character speed high while stretching the gaps) but it costs a second timing divider and two more configuration bits. Deferred unless tile area proves generous after the first synthesis run.
 4. **Auto-repeat scope.** Currently repeats a single character. Repeating a short stored string would need a small buffer and is likely not worth the flip-flops.
