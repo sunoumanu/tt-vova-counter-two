@@ -1,42 +1,58 @@
-![](../../workflows/gds/badge.svg) ![](../../workflows/docs/badge.svg) ![](../../workflows/test/badge.svg) ![](../../workflows/fpga/badge.svg)
+# tt_um_morse_converter — ASCII to Morse Code Converter
 
-# Tiny Tapeout Verilog Project Template
+[![gds](../../actions/workflows/gds.yaml/badge.svg)](../../actions/workflows/gds.yaml)
+[![test](../../actions/workflows/test.yaml/badge.svg)](../../actions/workflows/test.yaml)
+[![docs](../../actions/workflows/docs.yaml/badge.svg)](../../actions/workflows/docs.yaml)
+[![fpga](../../actions/workflows/fpga.yaml/badge.svg)](../../actions/workflows/fpga.yaml)
 
-- [Read the documentation for project](docs/info.md)
+A [Tiny Tapeout](https://tinytapeout.com) project (TTSKY26c, SkyWater 130nm,
+1×1 tile) that converts ASCII characters to ITU-R M.1677-1 Morse code in
+hardware. Characters arrive over a simple load/ready handshake; the chip owns
+all timing and serializes each character on a key line, as a PWM sidetone for
+the [TT Audio Pmod](https://github.com/MichaelBell/tt-audio-pmod), and as
+pulsing segments on the demoboard's 7-segment display.
 
-## What is Tiny Tapeout?
+- **Datasheet / pinout / usage:** [docs/info.md](docs/info.md)
+- **Design source:** [src/](src/) — plain Verilog-2001, single clock domain,
+  no latches, `uio_oe` tied to zero. One file per functional block:
+  [project.v](src/project.v) (top-level pin mapping and reset),
+  [morse_rom.v](src/morse_rom.v) (character encoding),
+  [dit_timer.v](src/dit_timer.v) (timing),
+  [morse_fsm.v](src/morse_fsm.v) (serializer + handshake),
+  [sidetone_pwm.v](src/sidetone_pwm.v) (audio)
+- **Host driver (MicroPython, ttboard SDK):**
+  [test/morse_demo.py](test/morse_demo.py)
+- **Verification:** [test/test.py](test/test.py) — 20 cocotb tests, pin-level
+  only (portable to gate-level sim and microcotb)
 
-Tiny Tapeout is an educational project that aims to make it easier and cheaper than ever to get your digital and analog designs manufactured on a real chip.
+## Highlights
 
-To learn more and get started, visit https://tinytapeout.com.
+- Letters, digits, and 17 punctuation characters; lowercase folded to
+  uppercase; ASCII space emits a proper 7 T word gap (gaps are
+  non-additive — `PARIS ` measures exactly 50 dit-times).
+- Eight power-of-two speed settings from ≈5.7 WPM (beginner-friendly) down to
+  a 16-clocks-per-dit simulation turbo; timing is strictly clock-proportional.
+- Flow control lets a polling MicroPython script stream arbitrary text with
+  no inserted pauses: `ready` rises during the trailing inter-character gap,
+  giving the host a full 3 T window.
+- Sidetone: 600/800/1000/440 Hz square wave, 5-bit PWM at f_clk/32, idle at
+  50% duty, keying aligned to tone zero crossings to suppress clicks.
 
-## Set up your Verilog project
+## Running the tests
 
-1. Add your Verilog files to the `src` folder.
-2. Edit the [info.yaml](info.yaml) and update information about your project, paying special attention to the `source_files` and `top_module` properties. If you are upgrading an existing Tiny Tapeout project, check out our [online info.yaml migration tool](https://tinytapeout.github.io/tt-yaml-upgrade-tool/).
-3. Edit [docs/info.md](docs/info.md) and add a description of your project.
-4. Adapt the testbench to your design. See [test/README.md](test/README.md) for more information.
+```sh
+cd test
+pip install -r requirements.txt
+make          # RTL simulation with Icarus Verilog
+```
 
-The GitHub action will automatically build the ASIC files using [LibreLane](https://www.zerotoasiccourse.com/terminology/librelane/).
+## Quick start on the demoboard
 
-## Enable GitHub actions to build the results page
+```python
+import morse_demo
+morse_demo.demo()   # sends "HELLO WORLD" at ~5.7 WPM
+```
 
-- [Enabling GitHub Pages](https://tinytapeout.com/faq/#my-github-action-is-failing-on-the-pages-part)
+## License
 
-## Resources
-
-- [FAQ](https://tinytapeout.com/faq/)
-- [Digital design lessons](https://tinytapeout.com/digital_design/)
-- [Learn how semiconductors work](https://tinytapeout.com/siliwiz/)
-- [Join the community](https://tinytapeout.com/discord)
-- [Build your design locally](https://www.tinytapeout.com/guides/local-hardening/)
-
-## What next?
-
-- [Submit your design to the next shuttle](https://app.tinytapeout.com/).
-- Edit [this README](README.md) and explain your design, how it works, and how to test it.
-- Share your project on your social network of choice:
-  - LinkedIn [#tinytapeout](https://www.linkedin.com/search/results/content/?keywords=%23tinytapeout) [@TinyTapeout](https://www.linkedin.com/company/100708654/)
-  - Mastodon [#tinytapeout](https://chaos.social/tags/tinytapeout) [@matthewvenn](https://chaos.social/@matthewvenn)
-  - X (formerly Twitter) [#tinytapeout](https://twitter.com/hashtag/tinytapeout) [@tinytapeout](https://twitter.com/tinytapeout)
-  - Bluesky [@tinytapeout.com](https://bsky.app/profile/tinytapeout.com)
+[Apache-2.0](LICENSE)

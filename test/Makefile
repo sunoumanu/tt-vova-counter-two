@@ -7,6 +7,10 @@ FST ?= -fst # Use more efficient FST format
 TOPLEVEL_LANG ?= verilog
 SRC_DIR = $(PWD)/../src
 PROJECT_SOURCES = project.v
+PROJECT_SOURCES += morse_rom.v
+PROJECT_SOURCES += dit_timer.v
+PROJECT_SOURCES += morse_fsm.v
+PROJECT_SOURCES += sidetone_pwm.v
 
 ifneq ($(GATES),yes)
 
