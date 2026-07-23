@@ -2,141 +2,109 @@
  * Tang Nano 20K (GW2AR-LV18QN88C8/I7) wrapper for tt_um_morse_converter.
  *
  * The Tiny Tapeout core (../../src/project.v and friends) is instantiated
- * *unchanged*; this file only adapts it to the board, so what you see and
- * hear on the board is what the ASIC will do, just 2.7x faster (27 MHz
- * crystal vs. the recommended 10 MHz; every time constant in the core is
- * clock-proportional).
+ * *unchanged*; this file only adapts it to the board.
  *
  * The ASIC eats 7-bit ASCII over a load/ready handshake on ui_in, which a
  * board with two buttons cannot type. So the only board-specific logic here
- * is a small message player: it walks a stored string and pushes each
- * character into the core exactly when the core raises `ready`, driving the
- * same ui_in[7]=load / ui_in[6:0]=char pins the host would. The morse timing
- * you watch on the LED and hear on the buzzer is produced entirely by the
- * core; the player only paces character delivery.
+ * is a small message player: it loops "SOS  " and pushes each character into
+ * the core exactly when the core raises `ready`, driving the same
+ * ui_in[7]=load / ui_in[6:0]=char pins a host would. The morse timing you
+ * watch on the LED is produced entirely by the core; the player only paces
+ * character delivery.
  *
- *   S1 (pin 88) : cycle the message      SOS -> HELLO WORLD -> CQ DE VOVA
- *   S2 (pin 87) : mute / unmute the sidetone
- *   speed[1:0]  : header jumpers, wpm_sel[1:0] (default 00 = ~15 WPM)
- *   rst_btn_n   : short header pin to GND to reset
+ * The core runs from a divided clock: 27 MHz / 4 = 6.75 MHz. The core's
+ * slowest speed setting is a fixed 2^21 clocks per dit, so dividing the
+ * clock is the only way to slow the blink down to a comfortable reading
+ * pace without touching the core. At 6.75 MHz the default dit is ~311 ms and
+ * a dah ~932 ms - easy to read by eye. It also puts the board closer to the
+ * ASIC's recommended 10 MHz than the raw 27 MHz crystal did.
  *
- * Reset sources (any of): power-on reset (~2.4 ms after configuration) or
- * the rst_btn_n header pin jumpered to GND. The core has its own reset
- * synchronizer, so a clean level is all it needs.
+ *   LED0 (pin 15)  : the morse key line, while SOS is being sent
+ *   LED0-5 (15-20) : one flash together when SOS ends, then a long dark pause
+ *   S2 (pin 87)    : mute / unmute the sidetone
+ *   speed[1:0]    : header jumpers, wpm_sel[1:0] (default 00 = slowest)
+ *   rst_btn_n     : short header pin to GND to reset
  */
 
 `default_nettype none
 
 module top (
     input  wire       clk,        // pin 4, 27 MHz crystal
-    input  wire       btn_s1,     // pin 88, S1, active high: next message
-    input  wire       btn_s2,     // pin 87, S2, active high: mute toggle
+    input  wire       btn_mute,   // pin 87, S2, active high: mute toggle
     input  wire       rst_btn_n,  // header J5 pin 42, pull-up; short to GND to reset
     input  wire [1:0] speed,      // header J5 pins {41,48}; wpm_sel[1:0], default 2'b00
-    output wire [7:0] seg,        // header J6: {dp, g, f, e, d, c, b, a}, active high
-    output wire [5:0] led_n,      // on-board LEDs, active low
+    output wire [5:0] led_n,      // on-board LEDs, active low (see below)
     output wire       audio_pwm,  // header J6 pin 85, PWM sidetone (buzzer / scope)
     output wire       key_line    // header J5 pin 80, clean morse key line (scope)
 );
 
   // --------------------------------------------------------------------------
+  // Clock divider: 27 MHz -> 6.75 MHz. Everything below runs on core_clk, so
+  // there is only ever one clock domain to reason about.
+  // --------------------------------------------------------------------------
+  reg clk_half = 1'b0;
+  reg core_clk = 1'b0;
+  always @(posedge clk) begin
+    clk_half <= ~clk_half;
+    if (clk_half) core_clk <= ~core_clk;
+  end
+
+  // --------------------------------------------------------------------------
   // Reset: power-on reset OR'd with the external reset pin.
   // --------------------------------------------------------------------------
-  reg [15:0] por_cnt = 16'd0;                 // 65536 clocks (~2.4 ms at 27 MHz)
+  reg [15:0] por_cnt = 16'd0;                 // 65536 clocks (~9.7 ms at 6.75 MHz)
   wire       por_done = &por_cnt;
-  always @(posedge clk)
+  always @(posedge core_clk)
     if (!por_done) por_cnt <= por_cnt + 16'd1;
 
   wire rst_n = por_done & rst_btn_n;
 
   // --------------------------------------------------------------------------
-  // Buttons: 2-flop sync + debounce + rising-edge detect.
+  // Mute button: 2-flop sync + debounce + rising-edge detect + toggle.
   // --------------------------------------------------------------------------
-  wire s1_clean, s2_clean;
-  debounce #(.W(19)) u_db1 (.clk(clk), .rst_n(rst_n), .noisy(btn_s1), .clean(s1_clean));
-  debounce #(.W(19)) u_db2 (.clk(clk), .rst_n(rst_n), .noisy(btn_s2), .clean(s2_clean));
+  wire mute_clean;
+  debounce #(.W(17)) u_db (                   // ~19 ms at 6.75 MHz
+      .clk  (core_clk),
+      .rst_n(rst_n),
+      .noisy(btn_mute),
+      .clean(mute_clean)
+  );
 
-  reg s1_prev, s2_prev;
-  always @(posedge clk or negedge rst_n)
-    if (!rst_n) {s1_prev, s2_prev} <= 2'b00;
-    else        {s1_prev, s2_prev} <= {s1_clean, s2_clean};
-
-  wire s1_rise = s1_clean & ~s1_prev;         // message advance
-  wire s2_rise = s2_clean & ~s2_prev;         // mute toggle
-
-  // --------------------------------------------------------------------------
-  // Configuration registers driven onto the core's uio_in bank.
-  // --------------------------------------------------------------------------
-  reg [1:0] msg_sel;                          // 0..2, selects the message
-  reg       audio_reg;                        // audio_en, toggled by S2
-  always @(posedge clk or negedge rst_n) begin
+  reg  mute_prev;
+  reg  audio_reg;                             // audio_en, toggled by S2
+  wire mute_rise = mute_clean & ~mute_prev;
+  always @(posedge core_clk or negedge rst_n) begin
     if (!rst_n) begin
-      msg_sel   <= 2'd0;
+      mute_prev <= 1'b0;
       audio_reg <= 1'b1;                       // sidetone on by default
     end else begin
-      if (s1_rise) msg_sel   <= (msg_sel == 2'd2) ? 2'd0 : msg_sel + 2'd1;
-      if (s2_rise) audio_reg <= ~audio_reg;
+      mute_prev <= mute_clean;
+      if (mute_rise) audio_reg <= ~audio_reg;
     end
   end
 
   // --------------------------------------------------------------------------
-  // Message ROM: msg_char / msg_len as a function of {msg_sel, idx}.
-  // A trailing space in each message gives a word gap before it loops.
+  // Message: "SOS  " on a loop - two trailing spaces, which are real Morse word
+  // gaps rather than anything invented here. The core gives 4 dits for a space
+  // that follows a character and 7 dits for a consecutive one, so the two
+  // together buy an 11-dit rest: one dit of that is the LED flash and the
+  // remaining ten are the quiet pause before SOS starts over.
   // --------------------------------------------------------------------------
-  reg [3:0] idx;
+  localparam [2:0] MSG_LAST = 3'd4;            // index of the last character
+
+  reg [2:0] idx;
   reg [6:0] msg_char;
-  reg [3:0] msg_len;
   always @(*) begin
-    case (msg_sel)
-      2'd0: begin                              // "SOS "
-        msg_len = 4'd4;
-        case (idx)
-          4'd0:    msg_char = 7'h53;           // S
-          4'd1:    msg_char = 7'h4F;           // O
-          4'd2:    msg_char = 7'h53;           // S
-          default: msg_char = 7'h20;           // space
-        endcase
-      end
-      2'd1: begin                              // "HELLO WORLD "
-        msg_len = 4'd12;
-        case (idx)
-          4'd0:    msg_char = 7'h48;           // H
-          4'd1:    msg_char = 7'h45;           // E
-          4'd2:    msg_char = 7'h4C;           // L
-          4'd3:    msg_char = 7'h4C;           // L
-          4'd4:    msg_char = 7'h4F;           // O
-          4'd5:    msg_char = 7'h20;           // space
-          4'd6:    msg_char = 7'h57;           // W
-          4'd7:    msg_char = 7'h4F;           // O
-          4'd8:    msg_char = 7'h52;           // R
-          4'd9:    msg_char = 7'h4C;           // L
-          4'd10:   msg_char = 7'h44;           // D
-          default: msg_char = 7'h20;           // space
-        endcase
-      end
-      default: begin                           // "CQ DE VOVA "
-        msg_len = 4'd11;
-        case (idx)
-          4'd0:    msg_char = 7'h43;           // C
-          4'd1:    msg_char = 7'h51;           // Q
-          4'd2:    msg_char = 7'h20;           // space
-          4'd3:    msg_char = 7'h44;           // D
-          4'd4:    msg_char = 7'h45;           // E
-          4'd5:    msg_char = 7'h20;           // space
-          4'd6:    msg_char = 7'h56;           // V
-          4'd7:    msg_char = 7'h4F;           // O
-          4'd8:    msg_char = 7'h56;           // V
-          4'd9:    msg_char = 7'h41;           // A
-          default: msg_char = 7'h20;           // space
-        endcase
-      end
+    case (idx)
+      3'd0:    msg_char = 7'h53;               // S
+      3'd1:    msg_char = 7'h4F;               // O
+      3'd2:    msg_char = 7'h53;               // S
+      default: msg_char = 7'h20;               // spaces at 3 and 4 (word gaps)
     endcase
   end
 
-  wire msg_last = (idx == msg_len - 4'd1);
-
   // --------------------------------------------------------------------------
-  // Core instance + status extraction (done first so the feeder can read it).
+  // Core instance.
   // --------------------------------------------------------------------------
   wire [7:0] uo_out;
   wire [7:0] uio_out;
@@ -144,14 +112,16 @@ module top (
 
   wire       core_ready = uo_out[1];           // ready line from the core
 
-  reg  load_q;                                 // ui_in[7]
+  reg        load_q;                           // ui_in[7]
 
   // uio_in: [2:0] wpm_sel, [3] audio_en, [5:4] tone_sel, [6] display_en,
   //         [7] auto_repeat. auto_repeat stays 0: the player owns looping.
+  //         display_en is on only because it ungates the tick tap on uo_out[6],
+  //         which the pause blink uses as its timebase.
   wire [2:0] wpm_sel = {1'b0, speed};          // wpm_sel[2]=0, [1:0] from jumpers
   wire [7:0] uio_in  = {1'b0,       // [7]   auto_repeat off
-                        1'b1,       // [6]   display_en on
-                        2'b11,      // [5:4] tone_sel = ~1.19 kHz at 27 MHz
+                        1'b1,       // [6]   display_en on (ungates tick)
+                        2'b10,      // [5:4] tone_sel = ~675 Hz at 6.75 MHz
                         audio_reg,  // [3]   audio_en
                         wpm_sel};   // [2:0] speed
 
@@ -164,60 +134,98 @@ module top (
       .uio_out(uio_out),
       .uio_oe (uio_oe),
       .ena    (1'b1),
-      .clk    (clk),
+      .clk    (core_clk),
       .rst_n  (rst_n)
   );
 
   // --------------------------------------------------------------------------
-  // Message feeder: present msg_char, pulse load when the core is ready, then
+  // Message feeder: present msg_char, assert load when the core is ready, then
   // advance on accept (ready falls). Handshake-paced, so it cannot outrun the
-  // core no matter the speed setting. Restarts at index 0 when the message
-  // changes.
+  // core at any speed setting.
   // --------------------------------------------------------------------------
-  always @(posedge clk or negedge rst_n) begin
+  wire accept = ~core_ready & load_q;
+
+  always @(posedge core_clk or negedge rst_n) begin
     if (!rst_n) begin
-      idx    <= 4'd0;
-      load_q <= 1'b0;
-    end else if (s1_rise) begin
-      idx    <= 4'd0;                           // fresh start on message change
+      idx    <= 3'd0;
       load_q <= 1'b0;
     end else if (core_ready && !load_q) begin
       load_q <= 1'b1;                           // ready and idle: assert load
-    end else if (!core_ready && load_q) begin
+    end else if (accept) begin
       load_q <= 1'b0;                           // accepted: drop load, next char
-      idx    <= msg_last ? 4'd0 : idx + 4'd1;
+      idx    <= (idx == MSG_LAST) ? 3'd0 : idx + 3'd1;
     end
   end
 
   // --------------------------------------------------------------------------
-  // Board outputs.
+  // "Between SOS cycles" detector.
+  //
+  // The core is always one character ahead of the player: it accepts the next
+  // character into staging while the current one is still going out. So shadow
+  // that pipeline with two flags. char_done rises exactly when the core retires
+  // a character and promotes staging, so promoting our flag on the same edge
+  // keeps playing_space in lockstep with what the key line is actually doing.
+  // playing_space is therefore true for exactly the trailing space of "SOS ",
+  // i.e. the word gap before the message repeats.
   // --------------------------------------------------------------------------
-  // External common-cathode 7-segment digit, active-high segments. The core
-  // already lays uo_out out as segments: a=key, b=ready, c=busy, d=element,
-  // e=char_done, f=invalid, g=tick, dp=audio_pwm.
-  assign seg = uo_out;
+  wire char_done = uo_out[4];                   // not gated by display_en
+  reg  char_done_d;
+  wire char_done_rise = char_done & ~char_done_d;
 
-  // On-board LEDs (active low): 0 key, 1 busy, 2 element, 3 char_done,
-  // 4 invalid, 5 tick.
-  assign led_n = ~{uo_out[6],   // LED5: tick      (dit-rate heartbeat)
-                   uo_out[5],   // LED4: invalid
-                   uo_out[4],   // LED3: char_done
-                   uo_out[3],   // LED2: element   (high through a dah)
-                   uo_out[2],   // LED1: busy
-                   uo_out[0]};  // LED0: key       (the morse output)
+  reg  staged_space;                            // char sitting in core staging
+  reg  playing_space;                           // char currently on the key line
 
-  assign audio_pwm = uo_out[7];                // PWM sidetone for a buzzer / filter
-  assign key_line  = uo_out[0];                // clean key line for a scope
+  always @(posedge core_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      char_done_d   <= 1'b0;
+      staged_space  <= 1'b0;
+      playing_space <= 1'b0;
+    end else begin
+      char_done_d <= char_done;
+      if (accept)         staged_space  <= (idx >= 3'd3);
+      if (char_done_rise) playing_space <= staged_space;
+    end
+  end
 
-  // The core never drives the bidirectional bank.
-  wire _unused = &{uio_out, uio_oe, 1'b0};
+  // One flash at the top of the rest, then dark for the remainder of it. Armed
+  // whenever a character is going out and cleared by the first dit tick of the
+  // rest, so the flash is exactly one dit long. Timing it off the core's own
+  // tick rather than a fixed-rate counter keeps it proportional at every speed
+  // setting. playing_space spans both spaces without dropping, so the flash
+  // cannot re-arm between them - it happens once per SOS.
+  wire tick = uo_out[6];                        // one core_clk pulse per dit
+  reg  flash;
+  always @(posedge core_clk or negedge rst_n) begin
+    if (!rst_n)              flash <= 1'b1;
+    else if (!playing_space) flash <= 1'b1;     // re-arm while sending
+    else if (tick)           flash <= 1'b0;     // first tick of the rest ends it
+  end
+
+  // --------------------------------------------------------------------------
+  // Board outputs. While SOS goes out, LED0 alone follows the key line; during
+  // the gap between repeats all six LEDs blink together. LEDs are active low.
+  // --------------------------------------------------------------------------
+  // playing_space is promoted off char_done's rising edge, which lands one
+  // core_clk after the next character's first mark goes out. Gating on the key
+  // line trims that one-cycle overlap: a real pause is silent by definition, so
+  // this can never extend the pause, only end it exactly on the first mark.
+  wire       in_pause = playing_space & ~uo_out[0];
+  wire [5:0] led_on   = in_pause ? {6{flash}}             // rest: one flash, then dark
+                                 : {5'b00000, uo_out[0]}; // sending: key only
+  assign led_n     = ~led_on;
+  assign key_line  =  uo_out[0];               // clean key line for a scope
+  assign audio_pwm =  uo_out[7];               // PWM sidetone for a buzzer / filter
+
+  // Unused core status taps (ready, char_done and tick are consumed above) and
+  // the bidirectional bank, which the core never drives.
+  wire _unused = &{uo_out[5], uo_out[3:2], uio_out, uio_oe, 1'b0};
 
 endmodule
 
 // Two-flop synchronizer + integrator debounce. `clean` follows `noisy` only
-// after it has held steady for 2^W clocks (~19 ms at 27 MHz with W=19).
+// after it has held steady for 2^W clocks (~19 ms at 6.75 MHz with W=17).
 module debounce #(
-    parameter W = 19
+    parameter W = 17
 ) (
     input  wire clk,
     input  wire rst_n,

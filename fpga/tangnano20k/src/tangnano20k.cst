@@ -2,28 +2,26 @@
 //
 // Pin facts from the Tang Nano 20K v1.2 schematic (Tang_Nano_20K_3921):
 //   - 27 MHz oscillator on pin 4
-//   - S1 = pin 88 (MODE0_KEY1), S2 = pin 87 (MODE1_KEY2); both switch the
-//     pin to +3V3 through 330R when pressed -> active high, pulled down here
-//   - LEDs 0..5 on pins 15..20, anodes at +3V3 through 510R -> active low
-//   - Header J6 carries pins 25..31 and 77; header J5 carries 41, 42, 48,
-//     80, 85 (pin numbers are printed on the board silkscreen)
+//   - S2 = pin 87 (MODE1_KEY2); switches the pin to +3V3 through 330R when
+//     pressed -> active high, pulled down here
+//   - LED0 on pin 15, anode at +3V3 through 510R -> active low
+//   - Header J5 carries pins 41, 42, 48, 80; header J6 carries pin 85
+//     (pin numbers are printed on the board silkscreen)
 
 // 27 MHz crystal
 IO_LOC "clk" 4;
 IO_PORT "clk" IO_TYPE=LVCMOS33 PULL_MODE=NONE;
 
-// On-board buttons (active high)
-IO_LOC "btn_s1" 88;                              // S1: next message
-IO_PORT "btn_s1" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
-IO_LOC "btn_s2" 87;                              // S2: mute toggle
-IO_PORT "btn_s2" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
+// On-board button S2 (active high)
+IO_LOC "btn_mute" 87;                            // S2: mute toggle
+IO_PORT "btn_mute" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
 
 // External reset: short this header pin to GND to reset
 IO_LOC "rst_btn_n" 42;                           // J5
 IO_PORT "rst_btn_n" IO_TYPE=LVCMOS33 PULL_MODE=UP;
 
-// Speed select jumpers -> wpm_sel[1:0]. Pull modes default to 2'b00
-// (~15 WPM at 27 MHz, the most watchable). Jumper to 3V3 to speed up.
+// Speed select jumpers -> wpm_sel[1:0]. Pull modes default to 2'b00, the
+// slowest setting (~311 ms dit). Jumper to 3V3 to speed up.
 // NOTE: must stay off pins 13/71-76/86; those are wired to the on-board
 // BL616 MCU (HSPI nets), which can drive them and override the weak
 // internal pulls. 41/42/48 go only to the unpopulated LCD FPC connector.
@@ -32,27 +30,8 @@ IO_PORT "speed[0]" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
 IO_LOC "speed[1]" 41;                            // J5, default 0 (pull-down)
 IO_PORT "speed[1]" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
 
-// 7-segment status display on header J6: common-cathode digit, active-high
-// segments. Use ~330R series resistors; seg[7:0] = {dp, g, f, e, d, c, b, a}.
-IO_LOC "seg[0]" 25;                              // a  = key
-IO_PORT "seg[0]" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8;
-IO_LOC "seg[1]" 26;                              // b  = ready
-IO_PORT "seg[1]" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8;
-IO_LOC "seg[2]" 27;                              // c  = busy
-IO_PORT "seg[2]" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8;
-IO_LOC "seg[3]" 28;                              // d  = element
-IO_PORT "seg[3]" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8;
-IO_LOC "seg[4]" 29;                              // e  = char_done
-IO_PORT "seg[4]" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8;
-IO_LOC "seg[5]" 30;                              // f  = invalid
-IO_PORT "seg[5]" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8;
-IO_LOC "seg[6]" 31;                              // g  = tick
-IO_PORT "seg[6]" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8;
-IO_LOC "seg[7]" 77;                              // dp = audio_pwm
-IO_PORT "seg[7]" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8;
-
-// On-board LEDs (active low): 0 key, 1 busy, 2 element, 3 char_done,
-// 4 invalid, 5 tick
+// On-board LEDs (active low). LED0 alone shows the morse key line while SOS
+// is being sent; all six blink together during the pause between repeats.
 IO_LOC "led_n[0]" 15;
 IO_PORT "led_n[0]" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8;
 IO_LOC "led_n[1]" 16;
